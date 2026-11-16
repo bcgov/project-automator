@@ -34,8 +34,8 @@ These rules determine which sprint an item belongs to:
 
 | Item Type | Trigger Condition   | Action         | Skip Condition             |
 |-----------|---------------------|----------------|----------------------------|
-| PR, Issue | Column=New, Next, Active | Sprint=current | Sprint=current already set |
-| PR, Issue | Column=Done         | Sprint=current | Sprint=any already set     |
+| PR, Issue | Column=Active, Next, Waiting | Sprint=current | Sprint=current already set |
+| PR, Issue | Column=Done                  | Sprint=current | Sprint=any already set     |
 
 ## 4. Linked Issue Rules
 

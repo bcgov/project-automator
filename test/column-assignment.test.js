@@ -160,7 +160,8 @@ test('policy: New is locked for issues only; Done keeps its sprint after rollove
     determineLinkedIssueColumn({ isClosed: false, merged: false, draft: false }, 'New', shipped),
     'New'
   );
-  assert.ok(sprints.assign_current.includes('New'));
+  assert.ok(!sprints.assign_current.includes('New'));
+  assert.ok(sprints.assign_current.includes('Waiting'));
 });
 
 test('add path: GitHub stamps Status=New on add, open PR ends Active with current sprint', () => {
@@ -173,10 +174,10 @@ test('add path: GitHub stamps Status=New on add, open PR ends Active with curren
     assert.strictEqual(column, 'Active', JSON.stringify(state));
     assert.strictEqual(sprintAction(column, null, 'sprint-91', sprints), 'assign');
   }
-  // Issue with no Status lands in New and still gets the current sprint
+  // Issue with no Status lands in New and gets no sprint
   const issueColumn = determineTargetColumn('Issue', false, null, { policy: shipped });
   assert.strictEqual(issueColumn, 'New');
-  assert.strictEqual(sprintAction(issueColumn, null, 'sprint-91', sprints), 'assign');
+  assert.strictEqual(sprintAction(issueColumn, null, 'sprint-91', sprints), null);
   // keep targets resolve to the current column, never a literal 'keep'
   const keepPolicy = {
     ...shipped,

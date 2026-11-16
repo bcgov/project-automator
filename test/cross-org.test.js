@@ -52,7 +52,8 @@ test('owners are read from the repo and the project URL', () => {
 
 test('a cross-org item already on the board is not reset', async () => {
   for (const [column, sprint] of [
-    ['Waiting', { id: 'sprint-88', title: 'Sprint 88' }],
+    ['Done', { id: 'sprint-88', title: 'Sprint 88' }],
+    ['Waiting', { id: CURRENT, title: 'Sprint 90' }],
     ['Next', { id: CURRENT, title: 'Sprint 90' }],
     ['Backlog', null],
     ['Active', { id: CURRENT, title: 'Sprint 90' }],
