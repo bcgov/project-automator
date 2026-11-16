@@ -715,10 +715,11 @@ async function updateItemColumn(projectId, projectItemId, columnName) {
  * Update an item's iteration (Sprint) field
  */
 async function updateItemSprint(projectId, projectItemId, sprintId) {
+  if (!sprintId) {
+    throw new Error('Sprint ID is required.');
+  }
   if (process.env.DRY_RUN === 'true') {
-    core.info(
-      `[DRY RUN] Would update item ${projectItemId} Sprint to ${sprintId ? `"${sprintId}"` : 'null (clear)'}`
-    );
+    core.info(`[DRY RUN] Would update item ${projectItemId} Sprint to "${sprintId}"`);
     return;
   }
   const { graphql } = projectClients();
@@ -728,57 +729,31 @@ async function updateItemSprint(projectId, projectItemId, sprintId) {
   }
 
   try {
-    if (!sprintId) {
-      const mutation = `
-        mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
-          clearProjectV2ItemFieldValue(input: {
-            projectId: $projectId,
-            itemId: $itemId,
-            fieldId: $fieldId
-          }) {
-            projectV2Item { id }
-          }
+    const mutation = `
+      mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $iterationId: String!) {
+        updateProjectV2ItemFieldValue(input: {
+          projectId: $projectId,
+          itemId: $itemId,
+          fieldId: $fieldId,
+          value: { iterationId: $iterationId }
+        }) {
+          projectV2Item { id }
         }
-      `;
-      const result = await withRetry(() =>
-        graphql(mutation, {
-          projectId,
-          itemId: projectItemId,
-          fieldId: meta.sprintFieldId,
-        })
-      );
-      requireUpdatedItem(
-        result,
-        'clearProjectV2ItemFieldValue',
-        `Clearing ${projectItemId} Sprint`
-      );
-    } else {
-      const mutation = `
-        mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $iterationId: String!) {
-          updateProjectV2ItemFieldValue(input: {
-            projectId: $projectId,
-            itemId: $itemId,
-            fieldId: $fieldId,
-            value: { iterationId: $iterationId }
-          }) {
-            projectV2Item { id }
-          }
-        }
-      `;
-      const result = await withRetry(() =>
-        graphql(mutation, {
-          projectId,
-          itemId: projectItemId,
-          fieldId: meta.sprintFieldId,
-          iterationId: sprintId,
-        })
-      );
-      requireUpdatedItem(
-        result,
-        'updateProjectV2ItemFieldValue',
-        `Setting ${projectItemId} Sprint to ${sprintId}`
-      );
-    }
+      }
+    `;
+    const result = await withRetry(() =>
+      graphql(mutation, {
+        projectId,
+        itemId: projectItemId,
+        fieldId: meta.sprintFieldId,
+        iterationId: sprintId,
+      })
+    );
+    requireUpdatedItem(
+      result,
+      'updateProjectV2ItemFieldValue',
+      `Setting ${projectItemId} Sprint to ${sprintId}`
+    );
   } catch (err) {
     if (isItemArchivedError(err)) {
       core.warning(

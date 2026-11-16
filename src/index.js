@@ -370,10 +370,6 @@ async function run(options = {}) {
             core.info(`Assigning current active sprint iteration "${meta.currentSprintTitle}"...`);
             await api.updateItemSprint(projectId, projectItemId, meta.currentSprintId);
             core.info('Sprint successfully associated!');
-          } else if (sprintChange === 'clear') {
-            core.info(`Clearing sprint iteration (column "${finalColumn}")...`);
-            await api.updateItemSprint(projectId, projectItemId, null);
-            core.info('Sprint cleared!');
           }
         }
 

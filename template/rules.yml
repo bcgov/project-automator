@@ -47,8 +47,6 @@ sprints:
   assign_current_if_empty:
     - Waiting
     - Done
-  clear:
-    - Backlog
 
 board_columns:
   locked:

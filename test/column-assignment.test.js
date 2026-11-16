@@ -161,7 +161,6 @@ test('policy: New is locked for issues only; Done keeps its sprint after rollove
     'New'
   );
   assert.ok(sprints.assign_current.includes('New'));
-  assert.ok(!(sprints.clear || []).includes('New'));
 });
 
 test('add path: GitHub stamps Status=New on add, open PR ends Active with current sprint', () => {

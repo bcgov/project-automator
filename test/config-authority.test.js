@@ -55,6 +55,11 @@ test('keys nothing reads are rejected', () => {
     config.technical.batch_size = 10;
   });
   assert.throws(() => loadBoardRules(file), /unknown key technical\.batch_size/);
+
+  const clearFile = writeRules((config) => {
+    config.sprints.clear = ['Backlog'];
+  });
+  assert.throws(() => loadBoardRules(clearFile), /unknown key sprints\.clear/);
 });
 
 test('the shipped rules.yml loads with every setting the engine reads', () => {
@@ -125,19 +130,15 @@ test('sprint changes follow rules.yml sprints', () => {
     assert.strictEqual(sprintAction(col, null, current, sprints), 'assign', col);
     assert.strictEqual(sprintAction(col, { id: 'it-1' }, current, sprints), null, col);
   }
-  // clear: remove any sprint
-  for (const col of sprints.clear) {
-    assert.strictEqual(sprintAction(col, { id: 'it-1' }, current, sprints), 'clear', col);
-    assert.strictEqual(sprintAction(col, null, current, sprints), null, col);
-  }
   // No current iteration or no column: nothing to assign
   assert.strictEqual(sprintAction('Active', null, null, sprints), null);
   assert.strictEqual(sprintAction(null, { id: 'it-1' }, current, sprints), null);
 
   // Custom columns are honoured
-  const custom = { assign_current: ['Review'], assign_current_if_empty: [], clear: ['Active'] };
+  const custom = { assign_current: ['Review'], assign_current_if_empty: ['Hold'] };
   assert.strictEqual(sprintAction('Review', null, current, custom), 'assign');
-  assert.strictEqual(sprintAction('Active', { id: 'it-1' }, current, custom), 'clear');
+  assert.strictEqual(sprintAction('Hold', null, current, custom), 'assign');
+  assert.strictEqual(sprintAction('Hold', { id: 'it-1' }, current, custom), null);
   assert.throws(() => sprintAction('Active', null, current, undefined), /sprints/);
 });
 
