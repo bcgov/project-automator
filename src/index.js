@@ -12,11 +12,10 @@ import {
   validateBoardColumns,
 } from './utils/column-assignment.js';
 import {
-  authorLogin,
-  findExcludedAuthor,
+  findExclusion,
   findExcludedLabel,
+  isReviewRequestedBy,
   isTitleExcluded,
-  labelNames,
 } from './utils/exclusions.js';
 import { resolveSince } from './github/queries.js';
 import {
@@ -27,7 +26,7 @@ import {
 } from './utils/board-lookup.js';
 import { apiUsage, formatApiUsage } from './utils/api-usage.js';
 import { getWatermark, saveWatermark } from './utils/watermark.js';
-import { sprintAction } from './utils/sprint.js';
+import { reconcileBoardSprints, sprintAction } from './utils/sprint.js';
 import { formatAccessSummary, formatResultCounts, formatSummaryRow } from './utils/summary.js';
 import {
   backfillSince,
@@ -213,6 +212,7 @@ async function run(options = {}) {
     core.info(`Discovered ${recentItems.length} recent items to evaluate.`);
 
     const summaryReport = [];
+    const sprintUpdatedIds = new Set();
 
     // 4. Process each item sequentially
     for (const item of recentItems) {
@@ -229,14 +229,14 @@ async function run(options = {}) {
 
         core.info(`\n--- Evaluating ${itemType} #${number} inside ${repoName}: "${title}" ---`);
 
-        // Exclude specific automated noise by title
-        if (isTitleExcluded(title, config.exclusions)) {
-          core.info(`Skipping: Automated item excluded based on title ("${title}").`);
-          continue;
-        }
-        const excludedLabel = findExcludedLabel(labelNames(item.labels), config.exclusions);
-        if (excludedLabel) {
-          core.info(`Skipping: Item excluded based on label ("${excludedLabel}").`);
+        const isReviewer = isReviewRequestedBy(item, monitoredUsers);
+        const exclusionReason = findExclusion(
+          { ...item, isReviewRequested: isReviewer },
+          config.exclusions,
+          monitoredUsers
+        );
+        if (exclusionReason) {
+          core.info(`Skipping: ${exclusionReason}`);
           continue;
         }
 
@@ -244,19 +244,6 @@ async function run(options = {}) {
         const isMaintainerRepo = maintainerRepos.includes(repoName);
         const isAuthored = monitoredUsers.includes(author);
         const isAssigned = assignees.some((login) => monitoredUsers.includes(login));
-        const isReviewer =
-          itemType === 'PullRequest' &&
-          (item.reviewRequests?.nodes || []).some((req) =>
-            monitoredUsers.includes(req.requestedReviewer?.login)
-          );
-        const excludedAuthor = findExcludedAuthor(
-          { author: authorLogin(item.author), isReviewRequested: isReviewer },
-          config.exclusions
-        );
-        if (excludedAuthor) {
-          core.info(`Skipping: Item excluded based on author ("${excludedAuthor}").`);
-          continue;
-        }
         // Linked issues inherit the PR's author as assignee only when a monitored user wrote the PR
         const assignee = isAuthored ? author : null;
 
@@ -369,6 +356,7 @@ async function run(options = {}) {
           if (sprintChange === 'assign') {
             core.info(`Assigning current active sprint iteration "${meta.currentSprintTitle}"...`);
             await api.updateItemSprint(projectId, projectItemId, meta.currentSprintId);
+            sprintUpdatedIds.add(projectItemId);
             core.info('Sprint successfully associated!');
           }
         }
@@ -446,7 +434,7 @@ async function run(options = {}) {
                 await api.updateItemColumn(projectId, linked.projectItemId, linkedTargetCol);
               }
 
-              // Inherit Sprint (only assigned here, as before; never cleared)
+              // Inherit Sprint
               if (config.sprints && config.project.fields.sprint) {
                 const linkedSprintChange = sprintAction(
                   linkedTargetCol,
@@ -457,6 +445,7 @@ async function run(options = {}) {
                 if (linkedSprintChange === 'assign') {
                   core.info(`Updating linked issue sprint to current active iteration...`);
                   await api.updateItemSprint(projectId, linked.projectItemId, meta.currentSprintId);
+                  sprintUpdatedIds.add(linked.projectItemId);
                 }
               }
 
@@ -493,6 +482,29 @@ async function run(options = {}) {
           action: itemErr.message,
         });
       }
+    }
+
+    // 4b. Reconcile sprints for existing board items in assign_current columns (covers rollovers and board moves)
+    if (
+      !backfill &&
+      config.sprints &&
+      config.project.fields.sprint &&
+      meta.currentSprintId &&
+      config.sprints.assign_current.length > 0
+    ) {
+      const boardItems = await api.getBoardItemsInColumns(projectId, config.sprints.assign_current);
+      const sweepReport = await reconcileBoardSprints({
+        items: boardItems,
+        currentSprintId: meta.currentSprintId,
+        currentSprintTitle: meta.currentSprintTitle,
+        sprints: config.sprints,
+        exclusions: config.exclusions,
+        monitoredUsers,
+        skipIds: sprintUpdatedIds,
+        updateSprint: (itemId) => api.updateItemSprint(projectId, itemId, meta.currentSprintId),
+        log: core,
+      });
+      summaryReport.push(...sweepReport);
     }
 
     // 5. Generate beautiful job summary

@@ -4,6 +4,7 @@ import * as core from '@actions/core';
 import { apiUsage, countCalls } from '../utils/api-usage.js';
 import { boardState, projectItemsFragment } from '../utils/board-state.js';
 import { LABELS_FRAGMENT, labelNames } from '../utils/exclusions.js';
+import { buildBoardSprintQuery } from '../utils/sprint.js';
 
 // Project field names from rules.yml `project.fields`; set once by the engine before any board call
 let projectFields = null;
@@ -796,22 +797,35 @@ function itemStateFields() {
 }
 
 /**
- * Every item on the board, read from the project side (paginated, 100 per call).
+ * Paginate items on a ProjectV2 board (100 per call).
  * @param {string} projectId
- * @returns {Promise<{ items: Map<string, {projectItemId: string, column: string|null, sprint: object|null, isArchived: boolean}>, calls: number }>}
- *   Keyed by the issue or PR node id
+ * @param {object} options
+ * @param {string} options.contentSelection - GraphQL fields inside `content { ... }`
+ * @param {string|null} [options.filterQuery] - Optional server-side ProjectV2 items `query`
+ * @param {boolean} [options.notArchivedOnly] - Limit to `archivedStates: [NOT_ARCHIVED]`
+ * @returns {Promise<{ nodes: Array<object>, calls: number }>}
  */
-async function getProjectBoardItems(projectId) {
+async function paginateProjectItems(
+  projectId,
+  { contentSelection, filterQuery = null, notArchivedOnly = false }
+) {
   const { graphql } = projectClients();
+  const varDecls = ['$projectId: ID!', '$cursor: String'];
+  const itemArgs = ['first: 100', 'after: $cursor'];
+  if (notArchivedOnly) itemArgs.push('archivedStates: [NOT_ARCHIVED]');
+  if (filterQuery) {
+    varDecls.push('$filterQuery: String!');
+    itemArgs.push('query: $filterQuery');
+  }
   const query = `
-    query($projectId: ID!, $cursor: String) {
+    query(${varDecls.join(', ')}) {
       node(id: $projectId) {
         ... on ProjectV2 {
-          items(first: 100, after: $cursor) {
+          items(${itemArgs.join(', ')}) {
             nodes {
               id
               isArchived
-              content { ... on Issue { id } ... on PullRequest { id } }
+              content { ${contentSelection} }
               ${itemStateFields()}
             }
             pageInfo { hasNextPage endCursor }
@@ -820,20 +834,76 @@ async function getProjectBoardItems(projectId) {
       }
     }
   `;
-  const items = new Map();
+  const nodes = [];
   let cursor = null;
   let calls = 0;
   do {
-    const result = await withRetry(() => graphql(query, { projectId, cursor }));
+    const vars = filterQuery ? { projectId, cursor, filterQuery } : { projectId, cursor };
+    const result = await withRetry(() => graphql(query, vars));
     calls++;
     const page = result?.node?.items;
     if (!page) throw new Error(`Could not read the item list of project ${projectId}`);
-    for (const node of page.nodes || []) {
-      if (node?.content?.id) items.set(node.content.id, readItemState(node));
-    }
+    nodes.push(...(page.nodes || []));
     cursor = page.pageInfo?.hasNextPage ? page.pageInfo.endCursor : null;
   } while (cursor);
+  return { nodes, calls };
+}
+
+/**
+ * Every item on the board, read from the project side (paginated, 100 per call).
+ * @param {string} projectId
+ * @returns {Promise<{ items: Map<string, {projectItemId: string, column: string|null, sprint: object|null, isArchived: boolean}>, calls: number }>}
+ *   Keyed by the issue or PR node id
+ */
+async function getProjectBoardItems(projectId) {
+  const { nodes, calls } = await paginateProjectItems(projectId, {
+    contentSelection: '... on Issue { id } ... on PullRequest { id }',
+  });
+  const items = new Map();
+  for (const node of nodes) {
+    if (node?.content?.id) items.set(node.content.id, readItemState(node));
+  }
   return { items, calls };
+}
+
+/**
+ * Non-archived board items currently in any of the given Status columns.
+ * @param {string} projectId
+ * @param {Array<string>} columns
+ * @returns {Promise<Array<{projectItemId: string, column: string|null, sprint: object|null, isArchived: boolean, type: string, number: number|null, repo: string|null, title: string}>>}
+ */
+async function getBoardItemsInColumns(projectId, columns) {
+  const filterQuery = buildBoardSprintQuery(getProjectFields().status, columns);
+  if (!filterQuery) return [];
+  const { nodes } = await paginateProjectItems(projectId, {
+    contentSelection: `
+      __typename
+      ... on Issue {
+        number title repository { nameWithOwner }
+        author { __typename login }
+        ${LABELS_FRAGMENT}
+      }
+      ... on PullRequest {
+        number title repository { nameWithOwner }
+        author { __typename login }
+        ${LABELS_FRAGMENT}
+        reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
+      }
+      ... on DraftIssue { title }
+    `,
+    filterQuery,
+    notArchivedOnly: true,
+  });
+  return nodes.map((node) => ({
+    ...readItemState(node),
+    type: node?.content?.__typename || null,
+    number: node?.content?.number ?? null,
+    repo: node?.content?.repository?.nameWithOwner ?? null,
+    title: node?.content?.title || '',
+    author: node?.content?.author || null,
+    labels: node?.content?.labels || null,
+    reviewRequests: node?.content?.reviewRequests || null,
+  }));
 }
 
 /**
@@ -1044,6 +1114,7 @@ export {
   checkAccess,
   requireAccess,
   getProjectBoardItems,
+  getBoardItemsInColumns,
   getProjectItemState,
   requireAddedItemId,
   requireUpdatedItem,

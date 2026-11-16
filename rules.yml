@@ -70,9 +70,8 @@ sprints:
   assign_current: # Set the current sprint
     - Active
     - Next
-    - New
-  assign_current_if_empty: # Set the current sprint only when the item has none
     - Waiting
+  assign_current_if_empty: # Set the current sprint only when the item has none
     - Done # Finished work keeps the sprint it was done in after a rollover
 
 # Board column moves, applied by src/utils/column-assignment.js

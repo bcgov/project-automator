@@ -43,9 +43,8 @@ sprints:
   assign_current:
     - Active
     - Next
-    - New
-  assign_current_if_empty:
     - Waiting
+  assign_current_if_empty:
     - Done
 
 board_columns:
