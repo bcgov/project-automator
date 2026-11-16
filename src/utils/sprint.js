@@ -1,3 +1,5 @@
+import { findExclusion } from './exclusions.js';
+
 /**
  * Decide the sprint change for an item from `rules.yml` `sprints`.
  * @param {string|null} column - The item's column after column moves
@@ -43,6 +45,8 @@ export function buildBoardSprintQuery(statusFieldName, columns) {
  * @param {string|null} options.currentSprintId
  * @param {string|null} options.currentSprintTitle
  * @param {object} options.sprints - `sprints` from rules.yml
+ * @param {object} [options.exclusions] - `exclusions` from rules.yml
+ * @param {Array<string>} [options.monitoredUsers]
  * @param {Set<string>} [options.skipIds] - Project item IDs already updated earlier in this run
  * @param {(projectItemId: string) => Promise<void>} options.updateSprint
  * @param {{info: Function, error: Function}} [options.log]
@@ -53,6 +57,8 @@ export async function reconcileBoardSprints({
   currentSprintId,
   currentSprintTitle,
   sprints,
+  exclusions,
+  monitoredUsers = [],
   skipIds,
   updateSprint,
   log,
@@ -68,6 +74,13 @@ export async function reconcileBoardSprints({
         ? `${item.type} ${item.repo}#${item.number}`
         : `${item.type || 'Item'} "${item.title || item.projectItemId}"`;
     try {
+      if (exclusions) {
+        const exclusionReason = findExclusion(item, exclusions, monitoredUsers);
+        if (exclusionReason) {
+          log?.info(`Skipping board sprint sweep for ${label}: ${exclusionReason}`);
+          continue;
+        }
+      }
       log?.info(
         `Board sprint sweep: assigning "${currentSprintTitle || currentSprintId}" to ${label} (column "${item.column}")...`
       );

@@ -878,8 +878,17 @@ async function getBoardItemsInColumns(projectId, columns) {
   const { nodes } = await paginateProjectItems(projectId, {
     contentSelection: `
       __typename
-      ... on Issue { number title repository { nameWithOwner } }
-      ... on PullRequest { number title repository { nameWithOwner } }
+      ... on Issue {
+        number title repository { nameWithOwner }
+        author { __typename login }
+        ${LABELS_FRAGMENT}
+      }
+      ... on PullRequest {
+        number title repository { nameWithOwner }
+        author { __typename login }
+        ${LABELS_FRAGMENT}
+        reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
+      }
       ... on DraftIssue { title }
     `,
     filterQuery,
@@ -887,10 +896,13 @@ async function getBoardItemsInColumns(projectId, columns) {
   });
   return nodes.map((node) => ({
     ...readItemState(node),
-    type: node?.content?.__typename || 'DraftIssue',
+    type: node?.content?.__typename || null,
     number: node?.content?.number ?? null,
     repo: node?.content?.repository?.nameWithOwner ?? null,
     title: node?.content?.title || '',
+    author: node?.content?.author || null,
+    labels: node?.content?.labels || null,
+    reviewRequests: node?.content?.reviewRequests || null,
   }));
 }
 

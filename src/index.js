@@ -12,11 +12,10 @@ import {
   validateBoardColumns,
 } from './utils/column-assignment.js';
 import {
-  authorLogin,
-  findExcludedAuthor,
+  findExclusion,
   findExcludedLabel,
+  isReviewRequestedBy,
   isTitleExcluded,
-  labelNames,
 } from './utils/exclusions.js';
 import { resolveSince } from './github/queries.js';
 import {
@@ -230,14 +229,14 @@ async function run(options = {}) {
 
         core.info(`\n--- Evaluating ${itemType} #${number} inside ${repoName}: "${title}" ---`);
 
-        // Exclude specific automated noise by title
-        if (isTitleExcluded(title, config.exclusions)) {
-          core.info(`Skipping: Automated item excluded based on title ("${title}").`);
-          continue;
-        }
-        const excludedLabel = findExcludedLabel(labelNames(item.labels), config.exclusions);
-        if (excludedLabel) {
-          core.info(`Skipping: Item excluded based on label ("${excludedLabel}").`);
+        const isReviewer = isReviewRequestedBy(item, monitoredUsers);
+        const exclusionReason = findExclusion(
+          { ...item, isReviewRequested: isReviewer },
+          config.exclusions,
+          monitoredUsers
+        );
+        if (exclusionReason) {
+          core.info(`Skipping: ${exclusionReason}`);
           continue;
         }
 
@@ -245,19 +244,6 @@ async function run(options = {}) {
         const isMaintainerRepo = maintainerRepos.includes(repoName);
         const isAuthored = monitoredUsers.includes(author);
         const isAssigned = assignees.some((login) => monitoredUsers.includes(login));
-        const isReviewer =
-          itemType === 'PullRequest' &&
-          (item.reviewRequests?.nodes || []).some((req) =>
-            monitoredUsers.includes(req.requestedReviewer?.login)
-          );
-        const excludedAuthor = findExcludedAuthor(
-          { author: authorLogin(item.author), isReviewRequested: isReviewer },
-          config.exclusions
-        );
-        if (excludedAuthor) {
-          core.info(`Skipping: Item excluded based on author ("${excludedAuthor}").`);
-          continue;
-        }
         // Linked issues inherit the PR's author as assignee only when a monitored user wrote the PR
         const assignee = isAuthored ? author : null;
 
@@ -512,6 +498,8 @@ async function run(options = {}) {
         currentSprintId: meta.currentSprintId,
         currentSprintTitle: meta.currentSprintTitle,
         sprints: config.sprints,
+        exclusions: config.exclusions,
+        monitoredUsers,
         skipIds: sprintUpdatedIds,
         updateSprint: (itemId) => api.updateItemSprint(projectId, itemId, meta.currentSprintId),
         log: core,

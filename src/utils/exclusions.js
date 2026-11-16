@@ -99,3 +99,55 @@ export function findExcludedAuthor({ author, isReviewRequested }, exclusionsConf
   if (exclusionsConfig.unless_review_requested && isReviewRequested) return null;
   return author;
 }
+
+/**
+ * Checks whether any monitored user is a requested reviewer on a PullRequest.
+ * @param {object} item - Issue or PullRequest with `__typename` (or `type`) and `reviewRequests`
+ * @param {Array<string>} monitoredUsers
+ * @returns {boolean}
+ */
+export function isReviewRequestedBy(item, monitoredUsers = []) {
+  return (
+    (item?.__typename || item?.type) === 'PullRequest' &&
+    (item?.reviewRequests?.nodes || []).some((req) =>
+      monitoredUsers.includes(req.requestedReviewer?.login)
+    )
+  );
+}
+
+/**
+ * Evaluate title, label, and author exclusions uniformly for an item.
+ * Draft issues only have titles; issues and PRs also check labels and authors.
+ * @param {object} item
+ * @param {object} exclusionsConfig - `exclusions` from rules.yml
+ * @param {Array<string>} [monitoredUsers]
+ * @returns {string | null} Human-readable exclusion reason, or null when not excluded
+ */
+export function findExclusion(item, exclusionsConfig, monitoredUsers = []) {
+  if (isTitleExcluded(item?.title, exclusionsConfig)) {
+    return `Automated item excluded based on title ("${item.title}").`;
+  }
+  const kind = item?.__typename || item?.type;
+  if (!kind || kind === 'DraftIssue') return null;
+
+  const excludedLabel = findExcludedLabel(
+    Array.isArray(item.labels) ? item.labels : labelNames(item.labels),
+    exclusionsConfig
+  );
+  if (excludedLabel) {
+    return `Item excluded based on label ("${excludedLabel}").`;
+  }
+
+  const author = typeof item.author === 'string' ? item.author : authorLogin(item.author);
+  const excludedAuthor = findExcludedAuthor(
+    {
+      author,
+      isReviewRequested: item.isReviewRequested ?? isReviewRequestedBy(item, monitoredUsers),
+    },
+    exclusionsConfig
+  );
+  if (excludedAuthor) {
+    return `Item excluded based on author ("${excludedAuthor}").`;
+  }
+  return null;
+}

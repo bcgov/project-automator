@@ -172,6 +172,87 @@ test('reconcileBoardSprints records per-item failures without aborting remaining
   );
 });
 
+test('reconcileBoardSprints enforces title, label, and author exclusions with review-request exception', async () => {
+  const updated = [];
+  const logs = [];
+  const exclusions = {
+    exact_titles: ['Dependency Dashboard'],
+    title_substrings: [],
+    title_prefixes: ['ZAP: '],
+    exclude_labels: ['do not track'],
+    authors: ['renovate[bot]'],
+    unless_review_requested: true,
+  };
+  const emptyLabels = { totalCount: 0, nodes: [] };
+  const items = [
+    {
+      projectItemId: 'item-title',
+      column: 'Active',
+      sprint: null,
+      isArchived: false,
+      type: 'Issue',
+      number: 1,
+      repo: 'bcgov/actions',
+      title: 'Dependency Dashboard',
+      author: { __typename: 'Bot', login: 'renovate' },
+      labels: emptyLabels,
+    },
+    {
+      projectItemId: 'item-label',
+      column: 'Next',
+      sprint: null,
+      isArchived: false,
+      type: 'Issue',
+      number: 2,
+      repo: 'bcgov/actions',
+      title: 'Ignored issue',
+      author: { __typename: 'User', login: 'someone' },
+      labels: { totalCount: 1, nodes: [{ name: 'Do Not Track' }] },
+    },
+    {
+      projectItemId: 'item-bot-no-review',
+      column: 'Active',
+      sprint: null,
+      isArchived: false,
+      type: 'PullRequest',
+      number: 3,
+      repo: 'bcgov/actions',
+      title: 'chore(deps): bump foo',
+      author: { __typename: 'Bot', login: 'renovate' },
+      labels: emptyLabels,
+      reviewRequests: { nodes: [] },
+    },
+    {
+      projectItemId: 'item-bot-reviewed',
+      column: 'Active',
+      sprint: { id: 'sprint-91', title: 'Sprint 91' },
+      isArchived: false,
+      type: 'PullRequest',
+      number: 4,
+      repo: 'bcgov/cert-manager-proxy',
+      title: 'chore(deps): security bump',
+      author: { __typename: 'Bot', login: 'renovate' },
+      labels: emptyLabels,
+      reviewRequests: { nodes: [{ requestedReviewer: { login: 'DerekRoberts' } }] },
+    },
+  ];
+
+  const report = await reconcileBoardSprints({
+    items,
+    currentSprintId: 'sprint-92',
+    currentSprintTitle: 'Sprint 92',
+    sprints,
+    exclusions,
+    monitoredUsers: ['DerekRoberts'],
+    updateSprint: async (id) => updated.push(id),
+    log: { info: (m) => logs.push(m), error: () => {} },
+  });
+
+  assert.deepStrictEqual(updated, ['item-bot-reviewed']);
+  assert.strictEqual(report.length, 1);
+  assert.strictEqual(logs.filter((m) => m.startsWith('Skipping board sprint sweep')).length, 3);
+});
+
 test('normal runs reconcile board sprints only when not backfilling', () => {
   const index = fs.readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
   assert.match(
