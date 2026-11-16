@@ -327,6 +327,11 @@ project:
     - bcgov-c
 ```
 
+### Sprint Configuration
+Configure `sprints` with `assign_current` (columns that always move to the active sprint) and `assign_current_if_empty` (columns that get the active sprint only when unset).
+
+> **Upgrading from v1.0.0:** Remove `sprints.clear` from `rules.yml` before upgrading. Schema validation rejects `sprints.clear` as an unknown key, and columns previously listed there retain their existing sprint.
+
 ### Authentication & Token Setup
 
 The sync engine requires authentication via a repository secret named `PROJECT_SYNC_TOKEN` configured in your workflow (`.github/workflows/sync.yml`).
