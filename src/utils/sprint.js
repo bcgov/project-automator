@@ -6,18 +6,13 @@
  * @param {object} sprints - `sprints` from rules.yml
  * @param {Array<string>} sprints.assign_current - Columns that always get the current sprint
  * @param {Array<string>} sprints.assign_current_if_empty - Columns that get it only when unset
- * @param {Array<string>} sprints.clear - Columns that have the sprint removed
- * @returns {'assign'|'clear'|null}
+ * @returns {'assign'|null}
  */
 export function sprintAction(column, currentSprint, currentSprintId, sprints) {
-  if (!sprints?.assign_current || !sprints.assign_current_if_empty || !sprints.clear) {
+  if (!sprints?.assign_current || !sprints.assign_current_if_empty) {
     throw new Error('sprints from rules.yml is required');
   }
-  if (!column) return null;
-  if (sprints.clear.includes(column)) {
-    return currentSprint ? 'clear' : null;
-  }
-  if (!currentSprintId) return null;
+  if (!column || !currentSprintId) return null;
   if (sprints.assign_current.includes(column)) {
     return currentSprint?.id === currentSprintId ? null : 'assign';
   }

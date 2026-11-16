@@ -29,13 +29,12 @@ test('getConfiguredColumns extracts unique columns and ignores "keep"', () => {
     sprints: {
       assign_current: ['Active', 'Next', 'Done'],
       assign_current_if_empty: ['Waiting'],
-      clear: ['New', 'Parked', 'Backlog'],
     },
   };
 
   const columns = getConfiguredColumns(config);
   assert.ok(!columns.includes('keep'));
-  const expected = ['Waiting', 'Parked', 'Active', 'New', 'Next', 'Done', 'Backlog'];
+  const expected = ['Waiting', 'Parked', 'Active', 'New', 'Next', 'Done'];
   for (const exp of expected) {
     assert.ok(columns.includes(exp), `Expected column "${exp}" to be present`);
   }
@@ -381,7 +380,6 @@ test('getConfiguredColumns preserves exact column names without trimming', () =>
     sprints: {
       assign_current: [' Done '],
       assign_current_if_empty: [' Waiting '],
-      clear: [' Backlog '],
     },
   };
 
@@ -391,7 +389,6 @@ test('getConfiguredColumns preserves exact column names without trimming', () =>
   assert.ok(columns.includes(' New '));
   assert.ok(columns.includes(' Next '));
   assert.ok(columns.includes(' Done '));
-  assert.ok(columns.includes(' Backlog '));
   assert.strictEqual(columns.includes('Active'), false);
 });
 

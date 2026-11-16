@@ -105,11 +105,10 @@ const schema = {
     },
     sprints: {
       type: 'object',
-      required: ['assign_current', 'assign_current_if_empty', 'clear'],
+      required: ['assign_current', 'assign_current_if_empty'],
       properties: {
         assign_current: { type: 'array', items: { type: 'string' } },
         assign_current_if_empty: { type: 'array', items: { type: 'string' } },
-        clear: { type: 'array', items: { type: 'string' } },
       },
       additionalProperties: false,
     },

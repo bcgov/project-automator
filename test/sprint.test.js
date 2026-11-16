@@ -24,7 +24,7 @@ test('New gets the current sprint and never clears it', () => {
   assert.strictEqual(sprintAction('New', { id: 'sprint-91' }, 'sprint-91', sprints), null);
 });
 
-test('Parked keeps its sprint; Backlog clears it', () => {
+test('Parked and Backlog keep their sprint', () => {
   assert.strictEqual(sprintAction('Parked', { id: 'sprint-90' }, 'sprint-91', sprints), null);
-  assert.strictEqual(sprintAction('Backlog', { id: 'sprint-90' }, 'sprint-91', sprints), 'clear');
+  assert.strictEqual(sprintAction('Backlog', { id: 'sprint-90' }, 'sprint-91', sprints), null);
 });

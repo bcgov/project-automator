@@ -18,7 +18,7 @@ A Sync Status move is cut only when a built-in already owns it and behaves the s
 | Issue with no Status → New | Sync | `board_columns.issue.no_status` | Item added is off for issues |
 | Linked issue follows its PR | Sync | `board_columns.linked_issue.*` | Built-in "Pull request linked to issue" stamps the PR, not the issue; keep it off or not New for PRs |
 | Locked columns (New for issues, Done, Waiting, Parked) | Sync | `board_columns.locked` | No built-in equivalent |
-| Sprint set / cleared | Sync | `sprints.*` | Built-ins only set Status |
+| Sprint assignment | Sync | `sprints.*` | Built-ins only set Status |
 | Intake (authored, assigned, review requested, repo scope) | Sync | `automation.*` | Built-in auto-add filters can't match user scope across orgs |
 | Exclusions (titles, labels, bots) | Sync | `exclusions.*` | No built-in equivalent |
 | Review approved / changes requested | Neither (optional built-in) | Project workflows | Enable only if it matches the board's meaning |

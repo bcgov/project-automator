@@ -131,7 +131,7 @@ export function getConfiguredColumns(config) {
     }
   }
   if (config?.sprints) {
-    ['assign_current', 'assign_current_if_empty', 'clear'].forEach((key) => {
+    ['assign_current', 'assign_current_if_empty'].forEach((key) => {
       if (Array.isArray(config.sprints[key])) {
         config.sprints[key].forEach((col) => {
           if (typeof col === 'string' && col.length > 0) {
