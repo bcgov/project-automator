@@ -26,7 +26,7 @@ import {
 } from './utils/board-lookup.js';
 import { apiUsage, formatApiUsage } from './utils/api-usage.js';
 import { getWatermark, saveWatermark } from './utils/watermark.js';
-import { reconcileBoardSprints, sprintAction } from './utils/sprint.js';
+import { reconcileBoardSprints, sprintAction, sprintSweepColumns } from './utils/sprint.js';
 import { formatAccessSummary, formatResultCounts, formatSummaryRow } from './utils/summary.js';
 import {
   backfillSince,
@@ -484,27 +484,24 @@ async function run(options = {}) {
       }
     }
 
-    // 4b. Reconcile sprints for existing board items in assign_current columns (covers rollovers and board moves)
-    if (
-      !backfill &&
-      config.sprints &&
-      config.project.fields.sprint &&
-      meta.currentSprintId &&
-      config.sprints.assign_current.length > 0
-    ) {
-      const boardItems = await api.getBoardItemsInColumns(projectId, config.sprints.assign_current);
-      const sweepReport = await reconcileBoardSprints({
-        items: boardItems,
-        currentSprintId: meta.currentSprintId,
-        currentSprintTitle: meta.currentSprintTitle,
-        sprints: config.sprints,
-        exclusions: config.exclusions,
-        monitoredUsers,
-        skipIds: sprintUpdatedIds,
-        updateSprint: (itemId) => api.updateItemSprint(projectId, itemId, meta.currentSprintId),
-        log: core,
-      });
-      summaryReport.push(...sweepReport);
+    // 4b. Reconcile sprints for existing board items (covers rollovers, board moves, and items closed between runs)
+    if (!backfill && config.project.fields.sprint && meta.currentSprintId) {
+      const sweepColumns = sprintSweepColumns(config.sprints);
+      if (sweepColumns.length > 0) {
+        const boardItems = await api.getBoardItemsInColumns(projectId, sweepColumns);
+        const sweepReport = await reconcileBoardSprints({
+          items: boardItems,
+          currentSprintId: meta.currentSprintId,
+          currentSprintTitle: meta.currentSprintTitle,
+          sprints: config.sprints,
+          exclusions: config.exclusions,
+          monitoredUsers,
+          skipIds: sprintUpdatedIds,
+          updateSprint: (itemId) => api.updateItemSprint(projectId, itemId, meta.currentSprintId),
+          log: core,
+        });
+        summaryReport.push(...sweepReport);
+      }
     }
 
     // 5. Generate beautiful job summary

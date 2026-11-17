@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { loadBoardRules } from '../src/config/board-rules.js';
-import { buildBoardSprintQuery, reconcileBoardSprints, sprintAction } from '../src/utils/sprint.js';
+import {
+  buildBoardSprintQuery,
+  reconcileBoardSprints,
+  sprintAction,
+  sprintSweepColumns,
+} from '../src/utils/sprint.js';
 
 const { sprints } = loadBoardRules();
 
@@ -253,10 +258,61 @@ test('reconcileBoardSprints enforces title, label, and author exclusions with re
   assert.strictEqual(logs.filter((m) => m.startsWith('Skipping board sprint sweep')).length, 3);
 });
 
+test('sprintSweepColumns combines assign_current and assign_current_if_empty without duplicates', () => {
+  assert.deepStrictEqual(sprintSweepColumns(sprints), ['Active', 'Next', 'Waiting', 'Done']);
+  assert.deepStrictEqual(
+    sprintSweepColumns({ assign_current: ['Active', 'Done'], assign_current_if_empty: ['Done'] }),
+    ['Active', 'Done']
+  );
+  assert.deepStrictEqual(sprintSweepColumns(null), []);
+});
+
+test('reconcileBoardSprints assigns current sprint to empty Done items and preserves existing Done sprints', async () => {
+  const updated = [];
+  const items = [
+    {
+      projectItemId: 'done-has-sprint',
+      column: 'Done',
+      sprint: { id: 'sprint-91', title: 'Sprint 91' },
+      isArchived: false,
+      type: 'PullRequest',
+      number: 10,
+      repo: 'bcgov/actions',
+      title: 'Finished in 91',
+      author: { __typename: 'User', login: 'DerekRoberts' },
+      labels: { totalCount: 0, nodes: [] },
+    },
+    {
+      projectItemId: 'done-empty',
+      column: 'Done',
+      sprint: null,
+      isArchived: false,
+      type: 'Issue',
+      number: 11,
+      repo: 'bcgov/actions',
+      title: 'Closed between runs',
+      author: { __typename: 'User', login: 'DerekRoberts' },
+      labels: { totalCount: 0, nodes: [] },
+    },
+  ];
+
+  const report = await reconcileBoardSprints({
+    items,
+    currentSprintId: 'sprint-92',
+    currentSprintTitle: 'Sprint 92',
+    sprints: { assign_current: [], assign_current_if_empty: ['Done'] },
+    updateSprint: async (id) => updated.push(id),
+    log: { info: () => {}, error: () => {} },
+  });
+
+  assert.deepStrictEqual(updated, ['done-empty']);
+  assert.strictEqual(report.length, 1);
+});
+
 test('normal runs reconcile board sprints only when not backfilling', () => {
   const index = fs.readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
   assert.match(
     index,
-    /!backfill[\s\S]*getBoardItemsInColumns\(projectId, config\.sprints\.assign_current\)/
+    /!backfill[\s\S]*sprintSweepColumns\(config\.sprints\)[\s\S]*getBoardItemsInColumns\(projectId, sweepColumns\)/
   );
 });
