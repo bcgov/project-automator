@@ -39,7 +39,20 @@ export function buildBoardSprintQuery(statusFieldName, columns) {
 }
 
 /**
- * Reconcile sprints for existing board items in `sprints.assign_current` columns.
+ * Unique columns whose sprints are managed by the board-side sweep.
+ * @param {object|null|undefined} sprints - `sprints` from rules.yml
+ * @returns {Array<string>}
+ */
+export function sprintSweepColumns(sprints) {
+  if (!sprints) return [];
+  return [
+    ...new Set([...(sprints.assign_current || []), ...(sprints.assign_current_if_empty || [])]),
+  ];
+}
+
+/**
+ * Reconcile sprints for existing board items in `sprints.assign_current` and
+ * `sprints.assign_current_if_empty` columns.
  * @param {object} options
  * @param {Array<object>} options.items - Board items from `getBoardItemsInColumns`
  * @param {string|null} options.currentSprintId
@@ -63,7 +76,7 @@ export async function reconcileBoardSprints({
   updateSprint,
   log,
 }) {
-  if (!currentSprintId || !sprints?.assign_current?.length) return [];
+  if (!currentSprintId || sprintSweepColumns(sprints).length === 0) return [];
   const report = [];
   for (const item of items || []) {
     if (item.isArchived || skipIds?.has(item.projectItemId)) continue;

@@ -328,9 +328,9 @@ project:
 ```
 
 ### Sprint Configuration
-Configure `sprints` with `assign_current` (columns that always move to the active sprint) and `assign_current_if_empty` (columns that get the active sprint only when unset).
+Configure `sprints` with `assign_current` (columns that always move to the active sprint) and `assign_current_if_empty` (columns that get the active sprint only when unset, preserving any existing sprint). On normal runs (not `catch_up`/backfill), Sync also sweeps non-archived, non-excluded board items in both lists so rollovers, UI column moves, and sprint-less items closed between runs receive the active sprint even if they fall outside the discovery window.
 
-> **Upgrading from v1.0.0:** Remove `sprints.clear` from `rules.yml` before upgrading. Schema validation rejects `sprints.clear` as an unknown key, and columns previously listed there retain their existing sprint.
+> **Upgrading from v1.0.0:** Remove `sprints.clear` from `rules.yml` before upgrading. Schema validation rejects `sprints.clear` as an unknown key, and columns previously listed there retain their existing sprint. Note that the first normal run after adopting the board sweep will also stamp the active sprint onto any older, non-excluded items in `assign_current_if_empty` columns (such as `Done`) whose Sprint is empty.
 
 ### Authentication & Token Setup
 
@@ -426,7 +426,7 @@ The token comes only from the `github_token` input. A `GITHUB_TOKEN` environment
 
 ## Search Window & API Usage
 
-Each run searches open issues and PRs, plus PRs closed without merging, updated since the last successful run (the watermark, minus a 10-minute overlap). Without a watermark it falls back to the last 2 hours. Closed and merged items are left to GitHub's built-in project workflows, which move them to Done. Board membership, Status and Sprint come back with the search results, so there are no per-item board lookups, and the monitored repos are combined into as few searches as fit. Each run's job summary shows the API call count and the remaining rate limit.
+Each run searches open issues and PRs, plus PRs closed without merging, updated since the last successful run (the watermark, minus a 10-minute overlap). Without a watermark it falls back to the last 2 hours. Closed and merged items are left to GitHub's built-in project workflows, which move them to Done. Board membership, Status and Sprint come back with the search results, so there are no per-item board lookups for same-org items, and the monitored repos are combined into as few searches as fit. At the end of a normal run (skipped during `catch_up`), Sync queries non-archived board items in `sprints.assign_current` and `sprints.assign_current_if_empty` to reconcile rollovers and empty `Done` sprints (respecting exclusions and preserving existing sprints in `assign_current_if_empty`). Each run's job summary shows the API call count and the remaining rate limit.
 
 ## Catch Up
 
